@@ -8,5 +8,4 @@ services:
       - .:/code
     ports:
       - "8000:8000"
-    restart:
-      - unless-stopped
+    restart: unless-stopped

@@ -1,5 +1,6 @@
 # TODO upgrade django version
 # TODO use better webserver than built-in django one
+# TODO rate-limit people -_-  or limit number of threads or something
 
 from django.http import HttpResponse
 from . import process
