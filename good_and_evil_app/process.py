@@ -104,6 +104,9 @@ def run(SIZE=720, SSAA=2, getId=lambda: datetime.datetime.now().isoformat(), col
         3. Rest of the image is created by recursively going up layers until outer layer is reached
     - Calling this function is ILLEGAL without listening to the album first!'''
 
+    ORIG_SIZE = SIZE
+    SIZE = SIZE * SSAA
+
     def makeImage(SIZE, SSAA, maxdepth, imageOuter, colorLo):
         pixels = makePixelsNumpy(SIZE=SIZE, SSAA=SSAA, maxdepth=maxdepth, imageOuter=imageOuter, colorLo=colorLo)
         return Image.fromarray(pixels, 'RGB')
@@ -112,7 +115,7 @@ def run(SIZE=720, SSAA=2, getId=lambda: datetime.datetime.now().isoformat(), col
         draw = ImageDraw.Draw(im_outer)
         # font = ImageFont.truetype("LiberationSans-Bold.ttf", 70)
         # font = ImageFont.truetype("NimbusSanL-Bol.otf", 70)
-        font = ImageFont.truetype(fontFace, fontSize)
+        font = ImageFont.truetype(fontFace, fontSize * SSAA)
         w1, h1 = draw.textsize(str1, font=font)
         w2, h2 = draw.textsize(str2, font=font)
         # https://stackoverflow.com/a/59008967/2111778
@@ -154,7 +157,9 @@ def run(SIZE=720, SSAA=2, getId=lambda: datetime.datetime.now().isoformat(), col
     imageOuter.save('good_and_evil_' + runId + '_outer.png')
 
     image = makeImage(SIZE, SSAA=SSAA, maxdepth=25, imageOuter=imageOuter, colorLo=colorLo)
+    image.save('good_and_evil_' + runId + '_SSAA.png')
+    image.thumbnail((ORIG_SIZE, ORIG_SIZE))
     image.save('good_and_evil_' + runId + '.png')
     return 'good_and_evil_' + runId + '.png'
 
-run(colorLo=(255,0,0))
+run()
