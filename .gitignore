@@ -17,3 +17,4 @@ tests/report/
 
 *.png
 !demo*.png
+!/static/css/*.png
