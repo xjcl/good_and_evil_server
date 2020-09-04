@@ -10,7 +10,7 @@ def makePixel(xy, SIZE, SSAA, maxdepth, imageOuter, colorLo):
 
     - SSAA (super-sample anti-alias) is applied to avoid jagged edges at color transitions
     - This needs to be a top-level function so it can be parallelized with multiprocessing
-    - Note this code is inefficient (not numpy-ized TODO) but I have 12 cores so'''
+    - DEPRECATED in favor of faster makePixelsNumpy'''
 
     def isOuter(x, y):
         return abs(x) + abs(y) > SIZE/2
@@ -50,9 +50,7 @@ def makePixel(xy, SIZE, SSAA, maxdepth, imageOuter, colorLo):
 
 def makePixelsNumpy(SIZE, SSAA, maxdepth, imageOuter, colorLo):
     '''makePixelsNumpy returns the G&E fractal image using efficient numpy code and recursion.
-    This does NOT apply text/captions.
-
-    - (Currently unfinished)'''
+    This does NOT apply text/captions.'''
 
     def isOuter(x, y):
         return abs(x) + abs(y) > SIZE/2
@@ -65,31 +63,16 @@ def makePixelsNumpy(SIZE, SSAA, maxdepth, imageOuter, colorLo):
         y = numpy.tile(numpy.arange(SIZE).reshape(SIZE, 1), SIZE) - SIZE/2 + .5
 
         for depth in range(maxdepth):
-            x, y = numpy.where(~isOuter(x, y), x - y, x), numpy.where(~isOuter(x, y), x + y, y)
+            x, y = numpy.where(~isOuter(x, y), x + y, x), numpy.where(~isOuter(x, y), y - x, y)
 
         if imageOuter:
-            # TODO rounding!!
-            # TODO SSAA
-            # TODO pick pixels from outer even if imageOuter (to avoid double-AA)
+            # TODO does this round correctly?
             x_, y_ = x + SIZE/2 - .5, y + SIZE/2 - .5
             return numpy.array(imageOuter)[y_.astype(int), x_.astype(int), :]
         else:
             base = numpy.repeat(isInside(x, y)[:, :, numpy.newaxis], 3, axis=2)
             ret = numpy.where(base, numpy.array([255,255,255])[None, None, :], numpy.array(colorLo)[None, None, :])
             return ret.astype(numpy.uint8)
-
-    # def pixelImage(x, y):
-    #     GRID_SIZE = SSAA  # creates grid of SSAA**2 pixels
-    #     if GRID_SIZE == 1 or (isOuter(x, y) and maxdepth > 0):
-    #         res = numpy.array(numpy.array( [pixelFractal(x, y)] ))
-    #     else:
-    #         x_topleft = x - 1/2 + 1/(2*GRID_SIZE)
-    #         y_topleft = y - 1/2 + 1/(2*GRID_SIZE)
-    #         res = numpy.array([
-    #             numpy.array( pixelFractal(x_topleft + dx/GRID_SIZE, y_topleft + dy/GRID_SIZE) )
-    #             for dx in range(GRID_SIZE) for dy in range(GRID_SIZE)
-    #         ])
-    #     return tuple( (res.sum(axis=0) / len(res)).astype(int) )
 
     return pixelFractal()
 
