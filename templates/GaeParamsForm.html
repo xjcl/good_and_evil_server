@@ -1,0 +1,16 @@
+{% load staticfiles %}
+<head>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <title>Linguist</title>
+</head>
+
+<div class="background-image"></div>
+<div class="content">
+<div class="container">
+<form id="form" method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button name="submit" type="submit" value="Submit" data-submit="Generating...">Generate</button>
+</form>
+</div>
+</div>

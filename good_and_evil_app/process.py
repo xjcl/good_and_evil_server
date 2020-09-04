@@ -77,7 +77,7 @@ def makePixelsNumpy(SIZE, SSAA, maxdepth, imageOuter, colorLo):
     return pixelFractal()
 
 
-def run(SIZE=720, SSAA=2, getId=lambda: datetime.datetime.now().isoformat(), colorLo=(0,0,0), str1='TALLY', str2='HALL', fontFace="Helvetica-Bold-Font.ttf", fontSize=70):
+def run(SIZE=720, SSAA=2, getId=lambda: 'good_and_evil_' + str(datetime.datetime.now().isoformat()), colorLo=(0,0,0), str1='TALLY', str2='HALL', fontFace="Helvetica-Bold-Font.ttf", fontSize=70):
     '''Does a full run to create a custom image in the style of Tally Hall's 'Good & Evil' album cover
 
     - Calls to makePixel are parallelized on multi-core CPUs
@@ -137,12 +137,12 @@ def run(SIZE=720, SSAA=2, getId=lambda: datetime.datetime.now().isoformat(), col
     runId = getId()
     imageOuter = makeImage(SIZE, SSAA=SSAA, maxdepth=0, imageOuter=None, colorLo=colorLo)
     imageOuter = captionOuter(imageOuter)
-    imageOuter.save('good_and_evil_' + runId + '_outer.png')
+    imageOuter.save(runId + '_outer.png')
 
     image = makeImage(SIZE, SSAA=SSAA, maxdepth=25, imageOuter=imageOuter, colorLo=colorLo)
-    image.save('good_and_evil_' + runId + '_SSAA.png')
+    image.save(runId + '_SSAA.png')
     image.thumbnail((ORIG_SIZE, ORIG_SIZE))
-    image.save('good_and_evil_' + runId + '.png')
-    return 'good_and_evil_' + runId + '.png'
+    image.save(runId + '.png')
+    return runId + '.png'
 
 run()
