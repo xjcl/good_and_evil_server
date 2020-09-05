@@ -2,6 +2,7 @@
 <head>
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <title>Good & Evil Album Art Generator</title>
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=0.86">
 </head>
 
 <div class="background-image"></div>
@@ -9,6 +10,7 @@
 <div class="container">
 <form id="form" method="post">
     {% csrf_token %}
+    <h3>Good & Evil Album Art Generator</h3>
     {{ form.as_p }}
     <button name="submit" type="submit" value="Submit" data-submit="Generating...">Generate</button>
 </form>
