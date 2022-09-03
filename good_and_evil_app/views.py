@@ -26,11 +26,11 @@ def create_image(request):
             except:
                 hex_color = form.cleaned_data.get('hex_color')
                 process.run(
-                    colorLo=(int(hex_color[-6:-4], 16), int(hex_color[-4:-2], 16), int(hex_color[-2:], 16)),
+                    get_id=lambda: make_image_path(form.cleaned_data),
+                    color_dark=(int(hex_color[-6:-4], 16), int(hex_color[-4:-2], 16), int(hex_color[-2:], 16)),
                     str1=form.cleaned_data.get('str1'),
                     str2=form.cleaned_data.get('str2'),
-                    fontSize=form.cleaned_data.get('font_size'),
-                    getId=lambda: make_image_path(form.cleaned_data)
+                    font_size=form.cleaned_data.get('font_size'),
                 )
             return HttpResponseRedirect('get?' + make_image_path(form.cleaned_data))
     else:

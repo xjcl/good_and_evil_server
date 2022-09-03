@@ -1,148 +1,191 @@
 from PIL import Image, ImageDraw, ImageFont
 import numpy
-import multiprocessing
 import datetime
-import functools
 
 
-def makePixel(xy, SIZE, SSAA, maxdepth, imageOuter, colorLo):
-    '''makePixel returns the color value of a single pixel in the resulting image.
-
-    - SSAA (super-sample anti-alias) is applied to avoid jagged edges at color transitions
-    - This needs to be a top-level function so it can be parallelized with multiprocessing
-    - DEPRECATED in favor of faster makePixelsNumpy'''
-
-    def isOuter(x, y):
-        return abs(x) + abs(y) > SIZE/2
-
-    def isInside(x, y):
-        return abs(x) > abs(y) and abs(x * y) == x * y or abs(x) < abs(y) and abs(x * y) != x * y
-
-    def pixelFractal(x, y, depth=0):
-
-        if isOuter(x, y) or depth >= maxdepth:
-            if imageOuter:
-                x_, y_ = x + SIZE/2 - .5, y + SIZE/2 - .5
-                # if x_ < 0 or x_ > SIZE - 1 or y_ < 0 or y_ > SIZE - 1:
-                #     print('!!!', x_, y_)
-                return imageOuter.getpixel((x_, y_))
-            else:
-                return (255,255,255) if isInside(x, y) else colorLo
-
-        # rotate 45 degrees ccwise and stretch by sqrt(2)
-        return pixelFractal(x - y, x + y, depth+1)
-
-    def pixelImage(x, y):
-        GRID_SIZE = SSAA  # creates grid of SSAA**2 pixels
-        if GRID_SIZE == 1 or (isOuter(x, y) and maxdepth > 0):
-            res = numpy.array(numpy.array( [pixelFractal(x, y)] ))
-        else:
-            x_topleft = x - 1/2 + 1/(2*GRID_SIZE)
-            y_topleft = y - 1/2 + 1/(2*GRID_SIZE)
-            res = numpy.array([
-                numpy.array( pixelFractal(x_topleft + dx/GRID_SIZE, y_topleft + dy/GRID_SIZE) )
-                for dx in range(GRID_SIZE) for dy in range(GRID_SIZE)
-            ])
-        return tuple( (res.sum(axis=0) / len(res)).astype(int) )
-
-    return pixelImage(xy[0], xy[1])
+def print_bool_matrix(a: numpy.ndarray):
+    """Prints a 2D numpy array as a string of X's and .'s, for documentation"""
+    for row in a:
+        print("".join("X" if el else "." for el in row))
 
 
-def makePixelsNumpy(SIZE, SSAA, maxdepth, imageOuter, colorLo):
-    '''makePixelsNumpy returns the G&E fractal image using efficient numpy code and recursion.
-    This does NOT apply text/captions.'''
+def run(
+    size=720,
+    ssaa=2,
+    get_id=lambda: "good_and_evil_" + str(datetime.datetime.now().isoformat()),
+    color_dark=(0, 0, 0),
+    str1="TALLY",
+    str2="HALL",
+    font_face="Helvetica-Bold-Font.ttf",
+    font_size=70,
+):
+    """
+    Function which generates a fractal artwork in the style of Tally Hall's "Good and Evil" album
+        cover and stores it in the file system.
 
-    def isOuter(x, y):
-        return abs(x) + abs(y) > SIZE/2
+    :param size: Width and height of output image in px
+    :param ssaa: Super-sampling anti-aliasing as used in video games.
+        The artwork is rendered at a multiple (typically 2x) of the original resolution, then down-
+        scaled to the originally requested resolution, which reduces aliasing at color boundaries.
+    :param get_id: Function which returns path to save output png to
+    :param color_dark: Artwork will contain pattern made of white and {color_dark}.
+        Triple with values in the range [0, 255]
+    :param str1: Top-left string in artwork, defaults to "TALLY"
+    :param str2: Top-right string in artwork, defaults to "HALL"
+    :param font_face: Font face to use for painting str1 and str2
+    :param font_size: Font size to use for painting str1 and str2
+    """
 
-    def isInside(x, y):
-        return ((abs(x) > abs(y)) & (abs(x * y) == x * y)) | ((abs(x) < abs(y)) & (abs(x * y) != x * y))
+    size *= ssaa
+    run_id = get_id()
 
-    def pixelFractal():
-        x = numpy.tile(numpy.arange(SIZE), (SIZE, 1)) - SIZE/2 + .5
-        y = numpy.tile(numpy.arange(SIZE).reshape(SIZE, 1), SIZE) - SIZE/2 + .5
+    """
+    Create 2D matrix with actual X (Y) coordinate of each pixel
+    X(size=8):                                       Y(size=8):
+        -3.5 -2.5 -1.5 -0.5 +0.5 +1.5 +2.5 +3.5         -3.5 -3.5 -3.5 -3.5 -3.5 -3.5 -3.5 -3.5 
+        -3.5 -2.5 -1.5 -0.5 +0.5 +1.5 +2.5 +3.5         -2.5 -2.5 -2.5 -2.5 -2.5 -2.5 -2.5 -2.5
+                          ...                                             ... 
+        -3.5 -2.5 -1.5 -0.5 +0.5 +1.5 +2.5 +3.5         +3.5 +3.5 +3.5 +3.5 +3.5 +3.5 +3.5 +3.5 
+    """
+    x = numpy.tile(numpy.arange(size), (size, 1)) - size / 2 + .5
+    y = numpy.tile(numpy.arange(size).reshape(size, 1), size) - size / 2 + .5
 
-        for depth in range(maxdepth):
-            x, y = numpy.where(~isOuter(x, y), x + y, x), numpy.where(~isOuter(x, y), y - x, y)
+    """
+    Create the 4 "blades" of the fractal as 2D binary mask (X = True = white color)
+       x * y > 0:   abs(x) > abs(y):  mask(size=8):
+        XXXX....        ........        ....XXX.
+        XXXX....        X......X        X...XX..
+        XXXX....        XX....XX        XX..X...
+        XXXX....        XXX..XXX        XXX.....
+        ....XXXX        XXX..XXX        .....XXX
+        ....XXXX        XX....XX        ...X..XX
+        ....XXXX        X......X        ..XX...X
+        ....XXXX        ........        .XXX....
+    """
+    mask = ((abs(x) > abs(y)) & (x * y > 0)) | ((abs(x) < abs(y)) & (x * y < 0))
 
-        if imageOuter:
-            # TODO does this round correctly?
-            x_, y_ = x + SIZE/2 - .5, y + SIZE/2 - .5
-            return numpy.array(imageOuter)[y_.astype(int), x_.astype(int), :]
-        else:
-            base = numpy.repeat(isInside(x, y)[:, :, numpy.newaxis], 3, axis=2)
-            ret = numpy.where(base, numpy.array([255,255,255])[None, None, :], numpy.array(colorLo)[None, None, :])
-            return ret.astype(numpy.uint8)
+    # True cells -> white pixel (255, 255, 255)   False cells -> {color_dark} pixel
+    pixels_outer = numpy.where(
+        numpy.repeat(mask[:, :, numpy.newaxis], 3, axis=2),  # repeat 3 times across R/G/B channels
+        numpy.array([[[255, 255, 255]]]),
+        numpy.array([[color_dark]]),
+    ).astype(numpy.uint8)
 
-    return pixelFractal()
+    """
+    Apply the 8 letterings around the rim of the artwork
+    image_outer(size=8):
+             TOP1  TOP2
+              ....XXX.
+        UPPER X...XX.. UPPER
+        SIDE1 XX..X... SIDE2
+              XXX.....
+              .....XXX
+        LOWER ...X..XX LOWER
+        SIDE1 ..XX...X SIDE2
+              .XXX....
+             BOT1  BOT2
+    """
+
+    image_outer = Image.fromarray(pixels_outer, "RGB")
+    draw = ImageDraw.Draw(image_outer)
+    font = ImageFont.truetype(font_face, font_size * ssaa)
+
+    # https://stackoverflow.com/a/59008967/2111778
+    w1 = draw.textsize(str1, font=font)[0] + font.getoffset(str1)[0]
+    h1 = draw.textsize(str1, font=font)[1] + font.getoffset(str1)[1]
+    w2 = draw.textsize(str2, font=font)[0] + font.getoffset(str2)[0]
+    h2 = draw.textsize(str2, font=font)[1] + font.getoffset(str2)[1]
+
+    # TOP
+    draw.text((1 * size / 4 - w1 / 2,  1 * size / 20 - h1 / 2), str1, font=font, fill=(255, 255, 255))
+    draw.text((3 * size / 4 - w2 / 2,  1 * size / 20 - h2 / 2), str2, font=font, fill=color_dark)
+
+    # UPPER SIDES
+    image_outer = image_outer.rotate(90)
+    image_outer = image_outer.transpose(Image.FLIP_LEFT_RIGHT)
+    draw = ImageDraw.Draw(image_outer)
+    draw.text((3 * size / 4 - w1 / 2,  1 * size / 20 - h1 / 2), str1, font=font, fill=(255, 255, 255))
+    draw.text((3 * size / 4 - w2 / 2, 19 * size / 20 - h2 / 2), str2, font=font, fill=color_dark)
+
+    # LOWER SIDES
+    image_outer = image_outer.transpose(Image.FLIP_LEFT_RIGHT)
+    draw = ImageDraw.Draw(image_outer)
+    draw.text((3 * size / 4 - w1 / 2,  1 * size / 20 - h1 / 2), str1, font=font, fill=color_dark)
+    draw.text((3 * size / 4 - w2 / 2, 19 * size / 20 - h2 / 2), str2, font=font, fill=(255, 255, 255))
+
+    # BOTTOM
+    image_outer = image_outer.rotate(90)
+    image_outer = image_outer.transpose(Image.FLIP_LEFT_RIGHT)
+    draw = ImageDraw.Draw(image_outer)
+    draw.text((1 * size / 4 - w1 / 2,  1 * size / 20 - h1 / 2), str1, font=font, fill=color_dark)
+    draw.text((3 * size / 4 - w2 / 2,  1 * size / 20 - h2 / 2), str2, font=font, fill=(255, 255, 255))
+
+    # return to original orientation
+    image_outer = image_outer.transpose(Image.FLIP_LEFT_RIGHT)
+    image_outer = image_outer.rotate(180)
+
+    image_outer.save(run_id + "_outer.png")
+
+    """
+    Determine the coordinates which are on the rim and thus form the "base case".
+    All other coordinates (. = False = those inside the diamond) require recursion!
+    is_outer(size=8):
+        XXX..XXX
+        XX....XX
+        X......X
+        ........
+        ........
+        X......X
+        XX....XX
+        XXX..XXX
+
+    Recursion:
+        Base case: For points on the rim, the pixel data is already accurate.
+        Recurse: For points inside the diamond, reach next layer via the operation
+            "45 degree counter-clockwise turn + sqrt(2) scaling" (visually obvious)
+            Note that we have the y-axis pointing down so positive rotations go CLOCKWISE
+                      ^ -y
+                      |
+                -x <--+--> [+x]
+                      |
+                      v [+y]
+            https://en.wikipedia.org/wiki/Scaling_(geometry)  Scaling matrix
+                [sqrt(2)   0    ]
+                [  0     sqrt(2)]
+            https://en.wikipedia.org/wiki/Rotation_matrix  Rotation matrix
+                [cos phi  -sin phi]     [cos -45  -sin -45]     [ 1/sqrt(2)  1/sqrt(2)]
+                [sin phi   cos phi]  =  [sin -45   cos -45]  =  [-1/sqrt(2)  1/sqrt(2)]
+            If we apply both, we multiply them together
+                [sqrt(2)   0    ]  [ 1/sqrt(2)  1/sqrt(2)]     [ 1  1]
+                [  0     sqrt(2)]  [-1/sqrt(2)  1/sqrt(2)]  =  [-1  1]
+            Thus we transform each inner point as follows
+                [ 1  1] [x]     [y+x]
+                [-1  1] [y]  =  [y-x]
+
+    Every iteration paints in half of the remaining pixels, so we can either do
+        - log2(size * size) iterations
+            - size = 720  =>  log2(720 * 720) = 18.98 iterations
+        - iterate until x and y no longer change
+            - experimentally this was after 18 modifications, so this condition is sound
+    """
+    num_iterations = int(numpy.log2(size * size)) + 1
+    for d in range(num_iterations):
+        is_outer = abs(x) + abs(y) > size / 2
+        x, y = (
+            numpy.where(is_outer, x, y + x),
+            numpy.where(is_outer, y, y - x)
+        )
+
+    # Map coordinates back from e.g. [-3.5, 3.5] to [0, 7]
+    x_, y_ = x + size / 2 - .5, y + size / 2 - .5
+
+    # TODO Maybe use 'round' here instead of 'int'?
+    pixels = numpy.array(image_outer)[y_.astype(int), x_.astype(int), :]
+    image = Image.fromarray(pixels, "RGB")
+    image.save(run_id + "_SSAA.png")
+    image = image.resize((size // ssaa, size // ssaa))
+    image.save(run_id + ".png")
 
 
-def run(SIZE=720, SSAA=2, getId=lambda: 'good_and_evil_' + str(datetime.datetime.now().isoformat()), colorLo=(0,0,0), str1='TALLY', str2='HALL', fontFace="Helvetica-Bold-Font.ttf", fontSize=70):
-    '''Does a full run to create a custom image in the style of Tally Hall's 'Good & Evil' album cover
-
-    - Calls to makePixel are parallelized on multi-core CPUs
-    - A careful sequence of steps is taken to add antialiasing while avoiding blurring:
-        1. Outer layer of the fractal is created WITH anti-aliasing
-        2. Font is rendered on outer layer (by its nature this has built-in anti-aliasing!)
-        3. Rest of the image is created by recursively going up layers until outer layer is reached
-    - Calling this function is ILLEGAL without listening to the album first!'''
-
-    ORIG_SIZE = SIZE
-    SIZE = SIZE * SSAA
-
-    def makeImage(SIZE, SSAA, maxdepth, imageOuter, colorLo):
-        pixels = makePixelsNumpy(SIZE=SIZE, SSAA=SSAA, maxdepth=maxdepth, imageOuter=imageOuter, colorLo=colorLo)
-        return Image.fromarray(pixels, 'RGB')
-
-    def captionOuter(im_outer):
-        draw = ImageDraw.Draw(im_outer)
-        # font = ImageFont.truetype("LiberationSans-Bold.ttf", 70)
-        # font = ImageFont.truetype("NimbusSanL-Bol.otf", 70)
-        font = ImageFont.truetype(fontFace, fontSize * SSAA)
-        w1, h1 = draw.textsize(str1, font=font)
-        w2, h2 = draw.textsize(str2, font=font)
-        # https://stackoverflow.com/a/59008967/2111778
-        w1 += font.getoffset(str1)[0]
-        h1 += font.getoffset(str1)[1]
-        w2 += font.getoffset(str2)[0]
-        h2 += font.getoffset(str2)[1]
-
-        # TOP SIDE
-        draw.text((  SIZE/4-w1/2, SIZE/20-h1/2), str1, font=font, fill=(255,255,255))
-        draw.text((3*SIZE/4-w2/2, SIZE/20-h2/2), str2, font=font, fill=colorLo)
-        im_outer = im_outer.rotate(90)
-
-        # LEFT SIDE
-        im_outer = im_outer.transpose(Image.FLIP_LEFT_RIGHT)
-        draw = ImageDraw.Draw(im_outer)
-        draw.text((3*SIZE/4-w1/2,   SIZE/20-h1/2), str1, font=font, fill=(255,255,255))
-        draw.text((3*SIZE/4-w2/2,19*SIZE/20-h2/2), str2, font=font, fill=colorLo)
-        im_outer = im_outer.transpose(Image.FLIP_LEFT_RIGHT)
-        # RIGHT SIDE !!!
-        draw = ImageDraw.Draw(im_outer)
-        draw.text((3*SIZE/4-w1/2,   SIZE/20-h1/2), str1, font=font, fill=colorLo)
-        draw.text((3*SIZE/4-w2/2,19*SIZE/20-h2/2), str2, font=font, fill=(255,255,255))
-        im_outer = im_outer.rotate(90)
-
-        # BOTTOM SIDE
-        im_outer = im_outer.transpose(Image.FLIP_LEFT_RIGHT)
-        draw = ImageDraw.Draw(im_outer)
-        draw.text((3*SIZE/4-w2/2, SIZE/20-h2/2), str2, font=font, fill=(255,255,255))
-        draw.text((  SIZE/4-w1/2, SIZE/20-h1/2), str1, font=font, fill=colorLo)
-        im_outer = im_outer.transpose(Image.FLIP_LEFT_RIGHT)
-        im_outer = im_outer.rotate(180)
-
-        return im_outer
-
-    runId = getId()
-    imageOuter = makeImage(SIZE, SSAA=SSAA, maxdepth=0, imageOuter=None, colorLo=colorLo)
-    imageOuter = captionOuter(imageOuter)
-    imageOuter.save(runId + '_outer.png')
-
-    image = makeImage(SIZE, SSAA=SSAA, maxdepth=25, imageOuter=imageOuter, colorLo=colorLo)
-    image.save(runId + '_SSAA.png')
-    image.thumbnail((ORIG_SIZE, ORIG_SIZE))
-    image.save(runId + '.png')
-    return runId + '.png'
-
-run()
+if __name__ == "__main__":
+    run(get_id=lambda: "new_algo")
