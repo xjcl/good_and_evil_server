@@ -25,7 +25,7 @@ SECRET_KEY = '0_nt0pjqpjx4rt8=*rfh$rzv#3xa8m_fkylds0qkr+!xuyk%ih'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['10.0.2.2', 'localhost', 'xjcl.online']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
