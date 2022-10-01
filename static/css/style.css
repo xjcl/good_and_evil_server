@@ -95,6 +95,10 @@ fieldset {
   width: 100%;
 }
 
+img {
+  width: 100%;
+}
+
 #form input[type="text"],
 #form input[type="email"],
 #form input[type="tel"],

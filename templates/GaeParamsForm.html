@@ -3,8 +3,27 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <title>Good & Evil Album Art Generator</title>
     <meta name="viewport" content="width=device-width, initial-scale=0.86">
+
+    <script>
+        function form_input() {
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    document.getElementById("preview").src = 'data:image/png;base64,' + xhr.responseText;
+                }
+            };
+            var formElement = document.getElementById("form");
+            var urlparams = new URLSearchParams(new FormData(formElement)).toString();
+            console.log(formElement);
+            xhr.open('GET', 'preview?' + urlparams);
+            xhr.send(formElement);
+        }
+
+        form_input();
+    </script>
 </head>
 
+<body onload="form_input();">
 <div class="background-image"></div>
 <div class="content">
 <div class="container">
@@ -12,7 +31,9 @@
     {% csrf_token %}
     <h3>Good & Evil Album Art Generator</h3>
     {{ form.as_p }}
+    Preview: <img id="preview"/><br/><br/>
     <button name="submit" type="submit" value="Submit" data-submit="Generating...">Generate</button>
 </form>
 </div>
 </div>
+</body>
