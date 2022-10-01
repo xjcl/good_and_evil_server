@@ -22,6 +22,7 @@ def _create_image(form, preview=False):
     hex_color = form.cleaned_data.get('hex_color')
     process.run(
         size=250 if preview else 720,
+        ssaa=1 if preview else 2,
         get_id=lambda: _make_image_path(form.cleaned_data),
         color_dark=(int(hex_color[-6:-4], 16), int(hex_color[-4:-2], 16), int(hex_color[-2:], 16)),
         str1=form.cleaned_data.get('str1'),
